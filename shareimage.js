@@ -72,16 +72,14 @@ export function drawCosts(trip, r, { date = new Date(), maxH = 1920 } = {}) {
       if (it.kind === C.SHARED) {
         const ex = new Set(it.excluded || []);
         const out = presence(C.PAYS).filter((f) => ex.has(f.id)).map((f) => f.name);
-        if (out.length) wrapNames('not shared by:', out, IW - 160, 22).forEach((t) => lines.push({ type: 'itemnote', name: t }));
+        if (out.length) wrapNames('Excluded:', out, IW - 160, 22).forEach((t) => lines.push({ type: 'itemnote', name: t }));
       }
     }
     if (e.extra) lines.push({ type: 'extra', name: e.extra > 0 ? 'Service / tip' : 'Discount', amount: e.extra });
-    const treated = presence(C.TREATED).map((f) => f.name);
-    const away = presence(C.ABSENT).map((f) => f.name);
-    if (treated.length) wrapNames('Treated (the others paid for them):', treated, IW - 80, 25)
-      .forEach((t, i) => lines.push({ type: 'who', name: t, kind: 'treated', first: i === 0 }));
-    if (away.length) wrapNames('Away (paid nothing):', away, IW - 80, 25)
-      .forEach((t, i) => lines.push({ type: 'who', name: t, kind: 'away', first: i === 0 }));
+    // treated and away friends: neither pays anything for this event
+    const excluded = [...presence(C.TREATED), ...presence(C.ABSENT)].map((f) => f.name);
+    if (excluded.length) wrapNames('Excluded:', excluded, IW - 80, 25)
+      .forEach((t, i) => lines.push({ type: 'who', name: t, first: i === 0 }));
     // main payer first, then the extra payers in the order they were entered
     const payers = [...new Set(C.payerIds(e))].map((id) => [id, er.payments[id] || 0]).filter(([, a]) => a !== 0);
     payers.forEach(([id, a]) => lines.push({ type: 'payer', name: C.nameOf(trip, id), amount: a, many: payers.length > 1 }));
@@ -152,7 +150,7 @@ export function drawCosts(trip, r, { date = new Date(), maxH = 1920 } = {}) {
           text(ctx, l.name, P + 28 + 76, cy - 4, { size: 22, color: COLORS.muted, maxW: IW - 140 });
         } else if (l.type === 'who') {
           text(ctx, l.name, P + 28, cy, { size: 25, weight: l.first ? 600 : 400,
-            color: l.kind === 'treated' ? '#b26a00' : COLORS.muted, maxW: IW - 56 });
+            color: '#b26a00', maxW: IW - 56 });
         } else if (l.type === 'extra') {
           text(ctx, l.name, P + 28 + 76, cy, { size: 27, color: COLORS.muted });
           text(ctx, (l.amount < 0 ? '−' : '+') + C.fmt(Math.abs(l.amount)), W - P - 28, cy, { size: 27, color: COLORS.muted, align: 'right' });
