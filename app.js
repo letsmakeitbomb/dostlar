@@ -258,6 +258,16 @@ function eventView(t, e) {
       `<button class="${cur === p ? 'on' : ''}" data-act="presence" data-f="${f.id}" data-p="${p}">${l}</button>`).join('')}</div></div>`;
   }).join('');
   const items = e.items.length ? e.items.map((it) => itemCard(t, e, it)).join('') : '<p class="muted">No items yet.</p>';
+  // Order list for the waiter: each ordered item once, with the total quantity.
+  const ordered = e.items.filter((it) => it.kind === C.ORDERED)
+    .map((it) => ({ it, q: Object.values(it.quantities || {}).reduce((a, b) => a + b, 0) })).filter((x) => x.q > 0);
+  const orderList = ordered.length ? `<h2>Order list <span class="muted small">(read to the waiter)</span></h2>
+    <div class="card"><table class="orders">
+      ${ordered.map(({ it, q }) => `<tr><td class="oq">${q} ×</td><td class="on" dir="auto">${esc(it.name)}</td>
+        <td class="op num">${fmt(it.price)}</td><td class="ot num">${fmt(it.price * q)}</td></tr>`).join('')}
+      <tr class="osum"><td class="oq">${ordered.reduce((a, x) => a + x.q, 0)}</td><td class="on">items</td><td></td>
+        <td class="ot num">${fmt(ordered.reduce((a, x) => a + x.it.price * x.q, 0))}</td></tr>
+    </table></div>` : '';
   const extraKind = (e.extra || 0) < 0 ? 'discount' : 'service';
   const shares = t.friends.filter((f) => r.shares[f.id]).map((f) =>
     `<div><span dir="auto">${esc(f.name)}</span><span class="num">${fmt(r.shares[f.id].round())}</span></div>`).join('');
@@ -279,6 +289,7 @@ function eventView(t, e) {
       <button class="btn outline" data-act="newItem" data-kind="${C.SHARED}">+ Shared item</button></div>
     <p class="hint"><b>Ordered</b>: price of one, then who had how many (food, drinks, rides).<br>
       <b>Shared</b>: one price split equally (cake, entry fee).</p>
+    ${orderList}
 
     <div class="row">
       <select data-bind="extraKind" style="width:auto">

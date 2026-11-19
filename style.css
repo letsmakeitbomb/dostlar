@@ -176,3 +176,13 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .payers .payrest { text-align: right; flex: none; min-width: 90px; }
 .payers > .btn { align-self: flex-start; padding-left: 4px; }
 .payers .iconspace { width: 44px; flex: none; }
+
+/* order list */
+.orders { width: 100%; border-collapse: collapse; }
+.orders td { padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.orders .oq { font-size: 22px; font-weight: 800; color: var(--primary); white-space: nowrap; width: 1%; padding-right: 10px; }
+.orders .on { font-size: 19px; font-weight: 600; overflow-wrap: anywhere; }
+.orders .op { color: var(--muted); font-size: 13px; text-align: right; }
+.orders .ot { text-align: right; font-weight: 600; }
+.orders .osum td { border-bottom: 0; font-weight: 700; }
+.orders .osum .oq, .orders .osum .on { font-size: 16px; color: var(--muted); }

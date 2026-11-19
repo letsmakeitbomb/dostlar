@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../style.css">
+<title>order list view</title>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+<div id="toast"></div>
+<input type="file" id="importFile" hidden>
+<script type="module">
+// Opens an event with several ordered items and scrolls to the order list (for a screenshot).
+const q = (o) => o;
+const t = { id: 'g', name: 'Dinner', createdAt: 1, friends: ['Ali', 'Sara', 'Reza', 'Mina'].map((n) => ({ id: n, name: n })),
+  events: [{ id: 'e', name: 'Restaurant', payerId: 'Ali', presence: {}, extra: 0, items: [
+    { id: '1', name: 'Kebab koobideh', kind: 'ORDERED', price: 450000, quantities: q({ Ali: 1, Sara: 1, Reza: 2 }), excluded: [] },
+    { id: '2', name: 'جوجه کباب', kind: 'ORDERED', price: 520000, quantities: q({ Mina: 1, Ali: 1 }), excluded: [] },
+    { id: '3', name: 'Doogh', kind: 'ORDERED', price: 60000, quantities: q({ Ali: 2, Sara: 1, Reza: 1, Mina: 1 }), excluded: [] },
+    { id: '4', name: 'Salad', kind: 'SHARED', price: 200000, quantities: {}, excluded: [] }] }] };
+localStorage.setItem('dostlar.trips.v1', JSON.stringify([t]));
+history.replaceState(null, '', '#/e/g/e');
+await import('../app.js');
+document.querySelector('.orders').closest('.card').previousElementSibling.scrollIntoView();
+</script>
