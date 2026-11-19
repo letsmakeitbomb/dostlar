@@ -105,6 +105,16 @@ test('several payers: extra payers their amount, main payer the rest', () => {
   eq(r2.people.reduce((a, p) => a + p.balance, 0), 0);
 });
 
+test('first payer amount: optional, warns when it does not add up', () => {
+  const t = trip('A', 'B');
+  t.events = [{ id: 'e', name: 'X', payerId: 'A', payerAmount: 600, otherPayers: [{ id: 'B', amount: 400 }], presence: {}, extra: 0,
+    items: [shared('x', 1000)] }];
+  eq(C.tripResult(t).events[0].problems, []);
+  t.events[0].payerAmount = 500;
+  eq(C.tripResult(t).events[0].problems.length, 1);
+  eq(C.tripResult(t).people.map((p) => p.paid), [600, 400]);
+});
+
 test('single expense exclusions migrate to treated', () => {
   const t = trip('A', 'B', 'C');
   t.events = [{ id: 'e', name: 'Cake', payerId: 'A', presence: {}, extra: 0, items: [shared('Cake', 100, ['C'])] }];

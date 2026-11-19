@@ -241,12 +241,13 @@ function eventView(t, e) {
   const others = C.otherPayers(e);
   const paidBy = `<div class="card payers">
     <div class="row"><select data-bind="payer">${opts(e.payerId)}</select>
-      ${others.length ? `<span class="payrest"><b class="num">${fmt(r.payments[e.payerId] || 0)}</b><br><span class="muted small">the rest</span></span>` : ''}</div>
+      <input class="amount payamt" data-bind="mainAmt" inputmode="numeric" placeholder="${fmt(Math.max(0, r.total - others.reduce((a, p) => a + (p.amount || 0), 0)))}" value="${amountValue(e.payerAmount || 0)}">
+      ${others.length ? '<span class="iconspace"></span>' : ''}</div>
     ${others.map((p, i) => `<div class="row"><select data-bind="opId" data-i="${i}">${opts(p.id)}</select>
       <input class="amount payamt" data-bind="opAmt" data-i="${i}" inputmode="numeric" placeholder="Amount" value="${amountValue(p.amount)}">
       <button class="icon" data-act="delPayer" data-i="${i}" aria-label="Remove payer">${ICON.trash}</button></div>`).join('')}
     <button class="btn plain" data-act="addPayer">+ Another payer</button>
-    ${others.length ? `<p class="hint" dir="auto">Enter what each extra payer paid; ${esc(C.nameOf(t, e.payerId))} paid the rest.</p>` : ''}
+    <p class="hint">Enter what each one paid. An empty first amount means “the rest of the bill” (shown in grey).</p>
   </div>`;
   const payLines = C.payerIds(e).filter((id, i, a) => a.indexOf(id) === i).map((id) =>
     `<div><span dir="auto">paid by ${esc(C.nameOf(t, id))}</span><span class="num">${fmt(r.payments[id] || 0)}</span></div>`).join('');
@@ -395,11 +396,15 @@ async function quickExpenseDialog(t) {
     const el = dlg.querySelector('.qrest');
     if (!el) return;
     readOthers();
-    if (!others.length) { el.textContent = ''; return; }
-    const rest = parseAmount(dlg.querySelector('[name=price]').value) - others.reduce((a, p) => a + p.amount, 0);
-    const main = C.nameOf(t, dlg.querySelector('[name=payer]').value);
-    el.textContent = `${main} paid the rest: ${fmt(rest)}`;
-    el.style.color = rest < 0 ? 'var(--bad)' : '';
+    const price = parseAmount(dlg.querySelector('[name=price]').value);
+    const sumOthers = others.reduce((a, p) => a + p.amount, 0);
+    const typed = Math.abs(parseAmount(dlg.querySelector('[name=pamt]').value));
+    dlg.querySelector('[name=pamt]').placeholder = fmt(Math.max(0, price - sumOthers));
+    const paid = sumOthers + (typed || Math.max(0, price - sumOthers));
+    const off = price > 0 && (sumOthers > price || (typed && paid !== price));
+    el.textContent = off ? `The payers' amounts add up to ${fmt(sumOthers + typed)}, but the total is ${fmt(price)}.`
+      : 'Enter what each one paid. An empty first amount means “the rest” (shown in grey).';
+    el.style.color = off ? 'var(--bad)' : '';
   };
   const paint = () => { dlg.querySelector('.qothers').innerHTML = othersHtml(); updateRest(); };
 
@@ -408,7 +413,8 @@ async function quickExpenseDialog(t) {
     body: `<label class="field">What (e.g. Birthday cake)<input name="nm" dir="auto" autocomplete="off" autofocus></label>
       <label class="field">Amount<input name="price" class="amount" inputmode="numeric"></label>
       <div class="payers"><div class="muted">Paid by</div>
-        <select name="payer">${opts(t.friends[0].id)}</select>
+        <div class="row"><select name="payer">${opts(t.friends[0].id)}</select>
+          <input name="pamt" class="amount payamt" inputmode="numeric"><span class="iconspace"></span></div>
         <div class="qothers payers"></div>
         <button type="button" class="btn plain" data-dact="addp">+ Another payer</button>
         <div class="hint qrest"></div></div>
@@ -421,7 +427,10 @@ async function quickExpenseDialog(t) {
       if (parseAmount(f.price.value) <= 0) return 'Please enter the amount.';
       if (new Set(ids).size !== ids.length) return 'The same friend is listed twice as a payer.';
       if (others.some((p) => p.amount <= 0)) return "Please enter each extra payer's amount.";
-      if (others.reduce((a, p) => a + p.amount, 0) > parseAmount(f.price.value)) return "The payers' amounts are more than the total.";
+      const sumOthers = others.reduce((a, p) => a + p.amount, 0);
+      const typed = Math.abs(parseAmount(f.pamt.value));
+      if (sumOthers > parseAmount(f.price.value)) return "The payers' amounts are more than the total.";
+      if (typed && typed + sumOthers !== parseAmount(f.price.value)) return `The payers' amounts add up to ${fmt(typed + sumOthers)}, but the total is ${fmt(parseAmount(f.price.value))}.`;
       if (![...f.querySelectorAll('[name=s]')].some((c) => c.checked)) return 'At least one friend must share it.';
       return '';
     },
@@ -441,6 +450,7 @@ async function quickExpenseDialog(t) {
   });
   dlg.querySelector('form').addEventListener('input', updateRest);
   dlg.querySelector('form').addEventListener('change', updateRest);
+  updateRest();
   const { value, form } = await opening;
   if (value !== 'ok') return;
   readOthers();
@@ -448,6 +458,7 @@ async function quickExpenseDialog(t) {
   const name = form.nm.value.trim();
   t.events.push({
     id: C.newId(), name, payerId: form.payer.value, otherPayers: others, extra: 0,
+    ...(Math.abs(parseAmount(form.pamt.value)) ? { payerAmount: Math.abs(parseAmount(form.pamt.value)) } : {}),
     presence: Object.fromEntries(t.friends.filter((f) => !sharing.has(f.id)).map((f) => [f.id, C.TREATED])),
     items: [{ id: C.newId(), name, kind: C.SHARED, price: parseAmount(form.price.value), quantities: {}, excluded: [] }],
   });
@@ -710,6 +721,7 @@ document.addEventListener('change', (ev) => {
     if (i < 0) e.payerId = el.value; else e.otherPayers[i].id = el.value;
   }
   if (bind === 'opAmt') e.otherPayers[Number(el.dataset.i)].amount = Math.abs(parseAmount(el.value));
+  if (bind === 'mainAmt') { const a = Math.abs(parseAmount(el.value)); if (a) e.payerAmount = a; else delete e.payerAmount; }
   if (bind === 'extra' || bind === 'extraKind') {
     const amount = Math.abs(parseAmount(app.querySelector('[data-bind=extra]').value));
     const kind = app.querySelector('[data-bind=extraKind]').value;

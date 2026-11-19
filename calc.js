@@ -136,6 +136,11 @@ function payments(trip, ev, total, problems) {
   const rest = total - others;
   if (rest < 0) problems.push(`The payers' amounts are ${fmt(others)}, more than the bill (${fmt(total)}).`);
   out[ev.payerId] = (out[ev.payerId] || 0) + rest;
+  // The first payer's amount is optional; empty means "the rest". If typed, everything must add up.
+  const typed = ev.payerAmount ? Math.round(ev.payerAmount) : 0;
+  if (typed && rest >= 0 && typed !== rest) {
+    problems.push(`The payers' amounts add up to ${fmt(others + typed)}, but the bill is ${fmt(total)}.`);
+  }
   return out;
 }
 

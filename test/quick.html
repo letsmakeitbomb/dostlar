@@ -29,7 +29,13 @@ try {
   out.push('second payer default: ' + sel.value);
   set(sel, 'r');
   set(dlg.querySelector('.qp-amt'), '300000');
-  out.push('rest text: ' + dlg.querySelector('.qrest').textContent);
+  out.push('main placeholder: ' + dlg.querySelector('[name=pamt]').placeholder);
+  set(dlg.querySelector('[name=pamt]'), '500000');
+  out.push('mismatch text: ' + dlg.querySelector('.qrest').textContent);
+  dlg.querySelector('[data-dval=ok]').click();
+  await wait(20);
+  out.push('blocked: ' + dlg.querySelector('.derr').textContent);
+  set(dlg.querySelector('[name=pamt]'), '700000');
   dlg.querySelector('[name=s][value=s]').checked = false;
   dlg.querySelector('[data-dval=ok]').click();
   await wait(50);

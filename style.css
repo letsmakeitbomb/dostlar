@@ -175,3 +175,4 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .payers .payamt { flex: none; width: 130px; text-align: right; }
 .payers .payrest { text-align: right; flex: none; min-width: 90px; }
 .payers > .btn { align-self: flex-start; padding-left: 4px; }
+.payers .iconspace { width: 44px; flex: none; }
