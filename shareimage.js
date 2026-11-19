@@ -39,7 +39,23 @@ function text(ctx, s, x, y, { size = 36, weight = 400, color = COLORS.text, alig
 
 // ---- list of costs: every event, its items, and who paid (split into phone-sized pages) ----
 
-const LINE_H = { item: 52, extra: 52, payer: 46 };
+const LINE_H = { item: 52, extra: 52, payer: 46, itemnote: 36, who: 42 };
+
+const measureCtx = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+
+/** Breaks "label: name, name, …" into lines no wider than maxW (names are never cut). */
+function wrapNames(label, names, maxW, size) {
+  measureCtx.font = `400 ${size}px ${FONT}`;
+  const out = [];
+  let line = label;
+  names.forEach((n, i) => {
+    const piece = (i ? ', ' : ' ') + n;
+    if (line !== label && measureCtx.measureText(line + piece).width > maxW) { out.push(line + ','); line = '   ' + n; }
+    else line += piece;
+  });
+  out.push(line);
+  return out;
+}
 
 /** Returns one canvas per page (1080 wide, at most ~1920 tall). */
 export function drawCosts(trip, r, { date = new Date(), maxH = 1920 } = {}) {
@@ -48,11 +64,24 @@ export function drawCosts(trip, r, { date = new Date(), maxH = 1920 } = {}) {
 
   const blocks = r.events.filter((er) => er.event.items.length).map((er) => {
     const e = er.event;
-    const lines = e.items.map((it) => {
+    const lines = [];
+    const presence = (want) => trip.friends.filter((f) => C.presenceOf(e, f.id) === want);
+    for (const it of e.items) {
       const q = it.kind === C.ORDERED ? Object.values(it.quantities || {}).reduce((a, b) => a + b, 0) : 0;
-      return { type: 'item', q, name: it.name, unit: it.kind === C.ORDERED ? it.price : 0, amount: C.itemTotal(it) };
-    });
+      lines.push({ type: 'item', q, name: it.name, unit: it.kind === C.ORDERED ? it.price : 0, amount: C.itemTotal(it) });
+      if (it.kind === C.SHARED) {
+        const ex = new Set(it.excluded || []);
+        const out = presence(C.PAYS).filter((f) => ex.has(f.id)).map((f) => f.name);
+        if (out.length) wrapNames('not shared by:', out, IW - 160, 22).forEach((t) => lines.push({ type: 'itemnote', name: t }));
+      }
+    }
     if (e.extra) lines.push({ type: 'extra', name: e.extra > 0 ? 'Service / tip' : 'Discount', amount: e.extra });
+    const treated = presence(C.TREATED).map((f) => f.name);
+    const away = presence(C.ABSENT).map((f) => f.name);
+    if (treated.length) wrapNames('Treated (the others paid for them):', treated, IW - 80, 25)
+      .forEach((t, i) => lines.push({ type: 'who', name: t, kind: 'treated', first: i === 0 }));
+    if (away.length) wrapNames('Away (paid nothing):', away, IW - 80, 25)
+      .forEach((t, i) => lines.push({ type: 'who', name: t, kind: 'away', first: i === 0 }));
     // main payer first, then the extra payers in the order they were entered
     const payers = [...new Set(C.payerIds(e))].map((id) => [id, er.payments[id] || 0]).filter(([, a]) => a !== 0);
     payers.forEach(([id, a]) => lines.push({ type: 'payer', name: C.nameOf(trip, id), amount: a, many: payers.length > 1 }));
@@ -119,6 +148,11 @@ export function drawCosts(trip, r, { date = new Date(), maxH = 1920 } = {}) {
           const nw = text(ctx, l.name, qx + 76, cy, { size: 29, weight: 600, maxW: IW - 440 });
           if (l.unit && l.q > 1) text(ctx, `@ ${C.fmt(l.unit)}`, qx + 76 + nw + 14, cy + 2, { size: 22, color: COLORS.muted });
           text(ctx, C.fmt(l.amount), W - P - 28, cy, { size: 29, align: 'right' });
+        } else if (l.type === 'itemnote') {
+          text(ctx, l.name, P + 28 + 76, cy - 4, { size: 22, color: COLORS.muted, maxW: IW - 140 });
+        } else if (l.type === 'who') {
+          text(ctx, l.name, P + 28, cy, { size: 25, weight: l.first ? 600 : 400,
+            color: l.kind === 'treated' ? '#b26a00' : COLORS.muted, maxW: IW - 56 });
         } else if (l.type === 'extra') {
           text(ctx, l.name, P + 28 + 76, cy, { size: 27, color: COLORS.muted });
           text(ctx, (l.amount < 0 ? '−' : '+') + C.fmt(Math.abs(l.amount)), W - P - 28, cy, { size: 27, color: COLORS.muted, align: 'right' });
