@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>share test</title>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+<div id="toast"></div>
+<input type="file" id="importFile" hidden>
+<pre id="out">running…</pre>
+<script type="module">
+// Clicks the Share icon with a fake share sheet and reports what would be shared.
+const t = { id: 'g', name: 'Test group', createdAt: 1, friends: [{ id: 'a', name: 'Ali' }, { id: 's', name: 'سارا' }],
+  events: [{ id: 'e', name: 'Cake', payerId: 'a', presence: {}, extra: 0,
+    items: [{ id: 'i', name: 'Cake', kind: 'SHARED', price: 100000, quantities: {}, excluded: [] }] }] };
+localStorage.setItem('dostlar.trips.v1', JSON.stringify([t]));
+history.replaceState(null, '', '#/t/g/result');
+let shared = null;
+navigator.canShare = (d) => !!(d && d.files);
+navigator.share = async (d) => { shared = d; };
+await import('../app.js');
+const out = [];
+try {
+  document.querySelector('[data-act=share]').click();
+  for (let i = 0; i < 50 && !shared; i++) await new Promise((r) => setTimeout(r, 20));
+  out.push('shared called: ' + !!shared);
+  const f = shared.files[0];
+  const head = new Uint8Array(await f.slice(0, 24).arrayBuffer());
+  const dv = new DataView(head.buffer);
+  out.push(`file: ${f.name} | ${f.type} | ${dv.getUint32(16)}x${dv.getUint32(20)} | ${f.size} bytes`);
+  out.push('text: ' + shared.text.split('\n').slice(0, 5).join(' / '));
+} catch (e) { out.push('ERROR ' + e.message); }
+document.getElementById('out').textContent = out.join('\n');
+</script>

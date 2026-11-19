@@ -1,8 +1,8 @@
 // Offline support: every app file is cached on first visit, then served from the cache.
 // Bump VERSION whenever a file changes, so phones pick up the new version.
-const VERSION = 'dostlar-v6';
+const VERSION = 'dostlar-v7';
 const FILES = [
-  './', './index.html', './app.js', './calc.js', './style.css', './manifest.webmanifest',
+  './', './index.html', './app.js', './calc.js', './shareimage.js', './style.css', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png',
 ];
 

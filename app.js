@@ -1,4 +1,5 @@
 import * as C from './calc.js';
+import { drawResult } from './shareimage.js';
 
 // ===== storage ========================================================================
 
@@ -560,13 +561,29 @@ const actions = {
     }
   },
   tab: (el) => { history.replaceState(history.state, '', `#/t/${el.dataset.id}/${el.dataset.tab}`); render(); },
+  // Shares a picture of the result (plus the text version) through the phone's share sheet.
   share: async (el) => {
     const t = tripById(el.dataset.id);
-    const text = C.shareText(t, C.tripResult(t));
+    const r = C.tripResult(t);
+    const text = C.shareText(t, r);
+    const blob = await new Promise((res) => drawResult(t, r).toBlob(res, 'image/png'));
+    const fileName = `${t.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Dostlar'} - result.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
     try {
-      if (navigator.share) await navigator.share({ title: t.name, text });
-      else { await navigator.clipboard.writeText(text); toast('Result copied'); }
-    } catch (err) { if (err && err.name !== 'AbortError') { try { await navigator.clipboard.writeText(text); toast('Result copied'); } catch { /* ignore */ } } }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: t.name, text });
+        return;
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return; // the user closed the share sheet
+    }
+    // No image sharing here (e.g. some desktop browsers): save the picture and copy the text.
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    try { await navigator.clipboard.writeText(text); toast('Image saved, text copied'); } catch { toast('Image saved'); }
   },
 
   // friends
