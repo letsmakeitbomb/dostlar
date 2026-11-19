@@ -7,7 +7,7 @@
 <input type="file" id="importFile" hidden>
 <pre id="out">running…</pre>
 <script type="module">
-// Clicks the Share icon with a fake share sheet and reports what would be shared.
+// Uses each of the three Share choices with a fake share sheet and reports what would be sent.
 const t = { id: 'g', name: 'Test group', createdAt: 1, friends: [{ id: 'a', name: 'Ali' }, { id: 's', name: 'سارا' }],
   events: [{ id: 'e', name: 'Cake', payerId: 'a', presence: {}, extra: 0,
     items: [{ id: 'i', name: 'Cake', kind: 'SHARED', price: 100000, quantities: {}, excluded: [] }] }] };
@@ -17,16 +17,21 @@ let shared = null;
 navigator.canShare = (d) => !!(d && d.files);
 navigator.share = async (d) => { shared = d; };
 await import('../app.js');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = [];
 try {
-  document.querySelector('[data-act=share]').click();
-  for (let i = 0; i < 50 && !shared; i++) await new Promise((r) => setTimeout(r, 20));
-  out.push('shared called: ' + !!shared);
-  const f = shared.files[0];
-  const head = new Uint8Array(await f.slice(0, 24).arrayBuffer());
-  const dv = new DataView(head.buffer);
-  out.push(`file: ${f.name} | ${f.type} | ${dv.getUint32(16)}x${dv.getUint32(20)} | ${f.size} bytes`);
-  out.push('text: ' + shared.text.split('\n').slice(0, 5).join(' / '));
+  for (const choice of ['transfers', 'friends', 'costs']) {
+    shared = null;
+    document.querySelector('[data-act=share]').click();
+    await wait(30);
+    document.querySelector(`#dlg [data-v=${choice}]`).click();
+    for (let i = 0; i < 100 && !shared; i++) await wait(20);
+    for (const f of shared.files) {
+      const dv = new DataView(await f.slice(0, 24).arrayBuffer());
+      out.push(`${choice}: ${f.name} | ${f.type} | ${dv.getUint32(16)}x${dv.getUint32(20)}`);
+    }
+    out.push(`${choice} text: ${shared.text ? shared.text.split('\n')[3] : '(none)'}`);
+  }
 } catch (e) { out.push('ERROR ' + e.message); }
 document.getElementById('out').textContent = out.join('\n');
 </script>

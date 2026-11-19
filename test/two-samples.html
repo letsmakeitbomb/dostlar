@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>details image sample</title>
+<pre id="out">running…</pre>
+<script type="module">
+// Renders the "costs per person" pages for a made-up group and prints them as data URLs.
+import * as C from '../calc.js';
+import { drawTransfers, drawFriends } from '../shareimage.js';
+const F = ['Ali', 'Sara', 'Reza', 'Mina', 'Omid'];
+const ord = (id, name, price, quantities) => ({ id, name, kind: C.ORDERED, price, quantities, excluded: [] });
+const sh = (id, name, price, excluded = []) => ({ id, name, kind: C.SHARED, price, quantities: {}, excluded });
+const t = { id: 'g', name: 'North trip', createdAt: 1, friends: F.map((n) => ({ id: n, name: n })), events: [
+  { id: 'e1', name: 'Restaurant', payerId: 'Ali', otherPayers: [{ id: 'Reza', amount: 500000 }], extra: 150000,
+    presence: { Sara: C.TREATED, Omid: C.ABSENT }, items: [
+      ord('k', 'Kebab', 450000, { Ali: 1, Sara: 1, Reza: 2 }),
+      ord('j', 'Joojeh', 520000, { Mina: 1, Sara: 1 }),
+      ord('d', 'Doogh', 60000, { Ali: 1, Sara: 1, Reza: 1, Mina: 1 }),
+      sh('s', 'Salad', 200000)] },
+  { id: 'e2', name: 'Birthday cake', payerId: 'Mina', extra: 0, presence: { Sara: C.TREATED }, items: [sh('c', 'Birthday cake', 1200000)] },
+  { id: 'e3', name: 'Amusement park', payerId: 'Omid', extra: 0, presence: {}, items: [
+      ord('r', 'Roller coaster', 300000, { Ali: 2, Omid: 1, Mina: 1 }),
+      ord('b', 'Bumper cars', 150000, { Reza: 1, Omid: 2 }),
+      sh('p', 'Parking', 100000)] },
+  { id: 'e4', name: 'Villa', payerId: 'Reza', extra: 0, presence: {}, items: [sh('v', 'Villa', 9000000)] },
+] };
+try {
+  const r = C.tripResult(t), d = { date: new Date(2026, 10, 20) };
+  const pages = [...drawTransfers(t, r, d), ...drawFriends(t, r, d)];
+  document.getElementById('out').textContent = pages.map((c) => c.toDataURL('image/png')).join('\n');
+} catch (e) { document.getElementById('out').textContent = 'ERROR ' + e.message + '\n' + e.stack; }
+</script>

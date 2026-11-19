@@ -1,5 +1,5 @@
 import * as C from './calc.js';
-import { drawResult } from './shareimage.js';
+import { drawTransfers, drawFriends, drawCosts } from './shareimage.js';
 
 // ===== storage ========================================================================
 
@@ -572,29 +572,46 @@ const actions = {
     }
   },
   tab: (el) => { history.replaceState(history.state, '', `#/t/${el.dataset.id}/${el.dataset.tab}`); render(); },
-  // Shares a picture of the result (plus the text version) through the phone's share sheet.
+  // Asks which picture to send, then shares it (all pages) through the phone's share sheet.
   share: async (el) => {
     const t = tripById(el.dataset.id);
+    const { value } = await openDialog({
+      title: 'Share as picture',
+      body: `<div class="menu">
+        <button type="button" data-dact="x" data-v="transfers">Who pays whom</button>
+        <button type="button" data-dact="x" data-v="friends">Each friend<br><span class="muted small">spent, share and balance</span></button>
+        <button type="button" data-dact="x" data-v="costs">List of costs<br><span class="muted small">every event, its items and who paid</span></button></div>`,
+      buttons: [{ value: 'cancel', label: 'Close' }],
+      onAction: (b) => { const c = dlg.querySelector('[data-dval]'); c.dataset.dval = b.dataset.v; c.click(); },
+    });
+    if (value === 'cancel') return;
     const r = C.tripResult(t);
-    const text = C.shareText(t, r);
-    const blob = await new Promise((res) => drawResult(t, r).toBlob(res, 'image/png'));
-    const fileName = `${t.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Dostlar'} - result.png`;
-    const file = new File([blob], fileName, { type: 'image/png' });
+    const draw = { transfers: drawTransfers, friends: drawFriends, costs: drawCosts }[value];
+    const label = { transfers: 'who pays whom', friends: 'each friend', costs: 'list of costs' }[value];
+    const canvases = draw(t, r);
+    const base = `${t.name.replace(/[\/:*?"<>|]+/g, ' ').trim() || 'Dostlar'} - ${label}`;
+    const files = await Promise.all(canvases.map(async (c, i) => {
+      const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+      return new File([blob], canvases.length > 1 ? `${base} ${i + 1}.png` : `${base}.png`, { type: 'image/png' });
+    }));
+    const text = value === 'transfers' ? C.shareText(t, r) : undefined;
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: t.name, text });
+      if (navigator.canShare && navigator.canShare({ files })) {
+        await navigator.share(text ? { files, title: t.name, text } : { files, title: t.name });
         return;
       }
     } catch (err) {
       if (err && err.name === 'AbortError') return; // the user closed the share sheet
     }
-    // No image sharing here (e.g. some desktop browsers): save the picture and copy the text.
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    try { await navigator.clipboard.writeText(text); toast('Image saved, text copied'); } catch { toast('Image saved'); }
+    // No picture sharing here (e.g. some desktop browsers): save the pictures instead.
+    for (const f of files) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(f);
+      a.download = f.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+    toast(files.length > 1 ? `${files.length} pictures saved` : 'Picture saved');
   },
 
   // friends
@@ -783,7 +800,7 @@ document.getElementById('importFile').addEventListener('change', async (ev) => {
     go(`#/t/${t.id}/result`);
     toast('Imported');
   } catch {
-    alertBox('Could not import', 'This file is not a Dostlar trip.');
+    alertBox('Could not import', 'This file is not a Dostlar group.');
   }
 });
 
