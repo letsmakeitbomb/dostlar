@@ -225,9 +225,9 @@ function resultTab(t, r) {
     ? r.transfers.map((x) => `<div class="card transfer row"><span class="grow" dir="auto">${esc(C.nameOf(t, x.from))} → ${esc(C.nameOf(t, x.to))}</span>
         <b class="num">${fmt(x.amount)}</b></div>`).join('')
     : '<p class="muted">Nothing to pay. Everyone is settled.</p>';
-  const people = r.people.map((p) => `<div class="card click row" data-act="openFriend" data-id="${p.friend.id}">
-      <div class="grow"><div class="title" dir="auto">${esc(p.friend.name)}</div>
-      <div class="muted small num">Spent ${fmt(p.paid)} · Share ${fmt(p.share)}</div></div>${balanceHtml(p.balance)}</div>`).join('');
+  const people = r.people.map((p) => `<div class="card click pcard" data-act="openFriend" data-id="${p.friend.id}">
+      <div class="row"><div class="title grow" dir="auto">${esc(p.friend.name)}</div>${balanceHtml(p.balance)}</div>
+      <div class="muted small">Spent <span class="num">${fmt(p.paid)}</span> · Share <span class="num">${fmt(p.share)}</span></div></div>`).join('');
   return `<div class="title" style="font-size:20px">Total: <span class="num">${fmt(r.total)}</span></div>
     <h2>Who pays whom</h2>${transfers}<h2>Each friend <span class="muted small">(tap for details)</span></h2>${people}`;
 }
@@ -572,46 +572,54 @@ const actions = {
     }
   },
   tab: (el) => { history.replaceState(history.state, '', `#/t/${el.dataset.id}/${el.dataset.tab}`); render(); },
-  // Asks which picture to send, then shares it (all pages) through the phone's share sheet.
+  // Pick a picture (Who pays whom / Each friend / List of costs), then save it to the phone or share it.
   share: async (el) => {
     const t = tripById(el.dataset.id);
+    const KINDS = [['transfers', 'Who pays whom', ''], ['friends', 'Each friend', 'spent, share and balance'],
+      ['costs', 'List of costs', 'every event, its items and who paid']];
+    let kind = 'transfers';
+    const list = () => KINDS.map(([k, l, sub]) => `<button type="button" class="pick ${k === kind ? 'on' : ''}" data-dact="pick" data-k="${k}">
+      <span class="dot"></span><span>${l}${sub ? `<br><span class="muted small">${sub}</span>` : ''}</span></button>`).join('');
     const { value } = await openDialog({
-      title: 'Share as picture',
-      body: `<div class="menu">
-        <button type="button" data-dact="x" data-v="transfers">Who pays whom</button>
-        <button type="button" data-dact="x" data-v="friends">Each friend<br><span class="muted small">spent, share and balance</span></button>
-        <button type="button" data-dact="x" data-v="costs">List of costs<br><span class="muted small">every event, its items and who paid</span></button></div>`,
-      buttons: [{ value: 'cancel', label: 'Close' }],
-      onAction: (b) => { const c = dlg.querySelector('[data-dval]'); c.dataset.dval = b.dataset.v; c.click(); },
+      title: 'Picture of the result',
+      body: `<div class="picks">${list()}</div>`,
+      buttons: [{ value: 'cancel', label: 'Close' }, { value: 'save', label: 'Save to phone', cls: 'outline' }, { value: 'share', label: 'Share', cls: '' }],
+      onAction: (b) => { kind = b.dataset.k; dlg.querySelector('.picks').innerHTML = list(); },
     });
     if (value === 'cancel') return;
     const r = C.tripResult(t);
-    const draw = { transfers: drawTransfers, friends: drawFriends, costs: drawCosts }[value];
-    const label = { transfers: 'who pays whom', friends: 'each friend', costs: 'list of costs' }[value];
+    const draw = { transfers: drawTransfers, friends: drawFriends, costs: drawCosts }[kind];
+    const label = { transfers: 'who pays whom', friends: 'each friend', costs: 'list of costs' }[kind];
     const canvases = draw(t, r);
     const base = `${t.name.replace(/[\/:*?"<>|]+/g, ' ').trim() || 'Dostlar'} - ${label}`;
     const files = await Promise.all(canvases.map(async (c, i) => {
       const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
       return new File([blob], canvases.length > 1 ? `${base} ${i + 1}.png` : `${base}.png`, { type: 'image/png' });
     }));
-    const text = value === 'transfers' ? C.shareText(t, r) : undefined;
-    try {
-      if (navigator.canShare && navigator.canShare({ files })) {
-        await navigator.share(text ? { files, title: t.name, text } : { files, title: t.name });
-        return;
+    if (value === 'share') {
+      const text = kind === 'transfers' ? C.shareText(t, r) : undefined;
+      try {
+        if (navigator.canShare && navigator.canShare({ files })) {
+          await navigator.share(text ? { files, title: t.name, text } : { files, title: t.name });
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError') return; // the user closed the share sheet
       }
-    } catch (err) {
-      if (err && err.name === 'AbortError') return; // the user closed the share sheet
+      toast('Sharing pictures is not supported here; saving instead');
     }
-    // No picture sharing here (e.g. some desktop browsers): save the pictures instead.
+    // Save: downloads go to the phone's Download folder, which the Gallery app shows.
     for (const f of files) {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(f);
       a.download = f.name;
+      document.body.appendChild(a);
       a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      if (files.length > 1) await new Promise((res) => setTimeout(res, 400));
     }
-    toast(files.length > 1 ? `${files.length} pictures saved` : 'Picture saved');
+    toast(files.length > 1 ? `${files.length} pictures saved to Downloads` : 'Picture saved to Downloads');
   },
 
   // friends

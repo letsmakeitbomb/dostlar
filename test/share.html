@@ -16,6 +16,8 @@ history.replaceState(null, '', '#/t/g/result');
 let shared = null;
 navigator.canShare = (d) => !!(d && d.files);
 navigator.share = async (d) => { shared = d; };
+const downloads = [];
+HTMLAnchorElement.prototype.click = function () { if (this.download) downloads.push(this.download); };
 await import('../app.js');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = [];
@@ -24,7 +26,8 @@ try {
     shared = null;
     document.querySelector('[data-act=share]').click();
     await wait(30);
-    document.querySelector(`#dlg [data-v=${choice}]`).click();
+    document.querySelector(`#dlg [data-k=${choice}]`).click();
+    document.querySelector('#dlg [data-dval=share]').click();
     for (let i = 0; i < 100 && !shared; i++) await wait(20);
     for (const f of shared.files) {
       const dv = new DataView(await f.slice(0, 24).arrayBuffer());
@@ -32,6 +35,14 @@ try {
     }
     out.push(`${choice} text: ${shared.text ? shared.text.split('\n')[3] : '(none)'}`);
   }
+  // Save to phone
+  document.querySelector('[data-act=share]').click();
+  await wait(30);
+  document.querySelector('#dlg [data-k=costs]').click();
+  document.querySelector('#dlg [data-dval=save]').click();
+  for (let i = 0; i < 100 && !document.getElementById('toast').textContent.includes('saved'); i++) await wait(20);
+  out.push('save: ' + document.getElementById('toast').textContent + ' | files: ' + downloads.join(', '));
+  out.push('card layout: ' + document.querySelectorAll('.pcard .row .title').length + ' cards with name+balance row');
 } catch (e) { out.push('ERROR ' + e.message); }
 document.getElementById('out').textContent = out.join('\n');
 </script>

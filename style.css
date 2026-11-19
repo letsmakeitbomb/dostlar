@@ -186,3 +186,21 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .orders .ot { text-align: right; font-weight: 600; }
 .orders .osum td { border-bottom: 0; font-weight: 700; }
 .orders .osum .oq, .orders .osum .on { font-size: 16px; color: var(--muted); }
+
+/* result cards: balance next to the name, numbers on their own line */
+.pcard { display: flex; flex-direction: column; gap: 2px; }
+.pcard .row > span { flex: none; }
+
+/* picture picker */
+.picks { display: flex; flex-direction: column; gap: 8px; }
+.pick {
+  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line);
+  background: none; color: var(--text); font-size: 17px; cursor: pointer;
+}
+.pick .dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--muted); flex: none; }
+.pick.on { border-color: var(--primary); background: var(--primary-soft); }
+.pick.on .dot { border-color: var(--primary); background: radial-gradient(var(--primary) 45%, transparent 50%); }
+
+/* names in any language line up on the left like the rest of the screen */
+:not(input):not(textarea)[dir="auto"] { text-align: left; }
