@@ -40,6 +40,18 @@ const ICON = {
   more: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>',
 };
 
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Dostlar';
+
+function saveFile(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
 let toastTimer;
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -549,7 +561,8 @@ const actions = {
     const { value } = await openDialog({
       title: t.name,
       body: `<div class="menu"><button type="button" data-dact="x" data-v="rename">Rename</button>
-        <button type="button" data-dact="x" data-v="export">Export file (backup)</button>
+        <button type="button" data-dact="x" data-v="sharefile">Share file<br><span class="muted small">send to Telegram, WhatsApp… (open it with Import)</span></button>
+        <button type="button" data-dact="x" data-v="export">Save file to phone<br><span class="muted small">backup in Downloads</span></button>
         <button type="button" data-dact="x" data-v="delete" class="danger">Delete</button></div>`,
       buttons: [{ value: 'cancel', label: 'Close' }],
       onAction: (b) => { dlg.querySelector('[data-dval]').dataset.dval = b.dataset.v; dlg.querySelector('[data-dval]').click(); },
@@ -558,12 +571,21 @@ const actions = {
       const name = await askText('Rename group', { value: t.name });
       if (name) { t.name = name; commit(); }
     } else if (value === 'export') {
-      const blob = new Blob([JSON.stringify(t, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${t.name}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      saveFile(new Blob([JSON.stringify(t, null, 2)], { type: 'application/json' }), `${safeName(t.name)}.json`);
+      toast('File saved to Downloads');
+    } else if (value === 'sharefile') {
+      // Android only lets web apps share some file types; .txt is allowed, .json is not.
+      const file = new File([JSON.stringify(t, null, 2)], `${safeName(t.name)} (Dostlar).txt`, { type: 'text/plain' });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: t.name });
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+      saveFile(file, `${safeName(t.name)}.json`);
+      toast('Sharing files is not supported here; saved instead');
     } else if (value === 'delete') {
       if (await confirmBox('Delete group?', `“${t.name}” and all its events will be deleted.`)) {
         trips = trips.filter((x) => x !== t);
@@ -802,7 +824,7 @@ document.getElementById('importFile').addEventListener('change', async (ev) => {
   ev.target.value = '';
   if (!file) return;
   try {
-    const t = C.importTrip(await file.text(), file.name.replace(/\.json$/i, ''));
+    const t = C.importTrip(await file.text(), file.name.replace(/\.(json|txt)$/i, '').replace(/ \(Dostlar\)$/, ''));
     trips.unshift(t);
     save();
     go(`#/t/${t.id}/result`);

@@ -20,8 +20,8 @@ Splits shared costs between friends. Once opened, it installs on your phone like
 
 You can edit and delete everything. Changes are saved straight away, in the browser on that device.
 
-- **Backup:** use ⋮ → **Export file** on a group.
-- **Import:** on the first screen. It opens exported files and the Windows app's files.
+- **Backup / send to a friend:** on a group, ⋮ → **Share file** (Telegram, WhatsApp…; sent as a `.txt` because Android doesn't allow sharing `.json` from web apps) or **Save file to phone**.
+- **Import:** on the first screen. It opens shared or saved files (`.txt` or `.json`) and the Windows app's files.
 - **Numbers:** amounts get thousands separators as you type, and Persian digits (۱۲۳) also work.
 
 ## Try it on this PC
