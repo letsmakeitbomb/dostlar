@@ -19,7 +19,20 @@
   <script type="module" src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+      // When a newer version has been downloaded, reload once so it is used right away.
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController && !reloaded) { reloaded = true; location.reload(); }
+      });
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+          // Check for a new version each time the app is brought back to the screen.
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => {});
+          });
+        });
+      });
     }
   </script>
 </body>

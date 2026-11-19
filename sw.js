@@ -1,13 +1,16 @@
 // Offline support: every app file is cached on first visit, then served from the cache.
 // Bump VERSION whenever a file changes, so phones pick up the new version.
-const VERSION = 'dostlar-v5';
+const VERSION = 'dostlar-v6';
 const FILES = [
   './', './index.html', './app.js', './calc.js', './style.css', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache, so a new version never stores old files.
+  e.waitUntil(caches.open(VERSION)
+    .then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
