@@ -378,25 +378,76 @@ async function itemDialog(t, e, original) {
 }
 
 async function quickExpenseDialog(t) {
-  const opts = t.friends.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+  const opts = (sel) => t.friends.map((f) => `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
   const checks = t.friends.map((f) => `<label class="check"><input type="checkbox" name="s" value="${f.id}" checked>
     <span dir="auto">${esc(f.name)}</span></label>`).join('');
-  const { value, form } = await openDialog({
+  let others = []; // extra payers [{id, amount}]; the main payer paid the rest
+
+  const readOthers = () => {
+    const ids = [...dlg.querySelectorAll('.qp-id')].map((x) => x.value);
+    const amts = [...dlg.querySelectorAll('.qp-amt')].map((x) => Math.abs(parseAmount(x.value)));
+    others = ids.map((id, i) => ({ id, amount: amts[i] || 0 }));
+  };
+  const othersHtml = () => others.map((p, i) => `<div class="row"><select class="qp-id">${opts(p.id)}</select>
+      <input class="amount payamt qp-amt" inputmode="numeric" placeholder="Amount" value="${amountValue(p.amount)}">
+      <button type="button" class="icon" data-dact="delp" data-i="${i}" aria-label="Remove payer">${ICON.trash}</button></div>`).join('');
+  const updateRest = () => {
+    const el = dlg.querySelector('.qrest');
+    if (!el) return;
+    readOthers();
+    if (!others.length) { el.textContent = ''; return; }
+    const rest = parseAmount(dlg.querySelector('[name=price]').value) - others.reduce((a, p) => a + p.amount, 0);
+    const main = C.nameOf(t, dlg.querySelector('[name=payer]').value);
+    el.textContent = `${main} paid the rest: ${fmt(rest)}`;
+    el.style.color = rest < 0 ? 'var(--bad)' : '';
+  };
+  const paint = () => { dlg.querySelector('.qothers').innerHTML = othersHtml(); updateRest(); };
+
+  const opening = openDialog({
     title: 'Single expense',
     body: `<label class="field">What (e.g. Birthday cake)<input name="nm" dir="auto" autocomplete="off" autofocus></label>
       <label class="field">Amount<input name="price" class="amount" inputmode="numeric"></label>
-      <label class="field">Paid by<select name="payer">${opts}</select></label>
+      <div class="payers"><div class="muted">Paid by</div>
+        <select name="payer">${opts(t.friends[0].id)}</select>
+        <div class="qothers payers"></div>
+        <button type="button" class="btn plain" data-dact="addp">+ Another payer</button>
+        <div class="hint qrest"></div></div>
       <div class="muted">Shared by <span class="small">(unticked friends don't pay; they show as Treated)</span></div>${checks}`,
     buttons: [{ value: 'cancel', label: 'Cancel' }, { value: 'ok', label: 'Save', cls: '', primary: true }],
-    validate: (_, f) => !f.nm.value.trim() ? 'Please enter what it was.'
-      : parseAmount(f.price.value) <= 0 ? 'Please enter the amount.'
-      : ![...f.querySelectorAll('[name=s]')].some((c) => c.checked) ? 'At least one friend must share it.' : '',
+    validate: (_, f) => {
+      readOthers();
+      const ids = [f.payer.value, ...others.map((p) => p.id)];
+      if (!f.nm.value.trim()) return 'Please enter what it was.';
+      if (parseAmount(f.price.value) <= 0) return 'Please enter the amount.';
+      if (new Set(ids).size !== ids.length) return 'The same friend is listed twice as a payer.';
+      if (others.some((p) => p.amount <= 0)) return "Please enter each extra payer's amount.";
+      if (others.reduce((a, p) => a + p.amount, 0) > parseAmount(f.price.value)) return "The payers' amounts are more than the total.";
+      if (![...f.querySelectorAll('[name=s]')].some((c) => c.checked)) return 'At least one friend must share it.';
+      return '';
+    },
+    onAction: (el) => {
+      readOthers();
+      if (el.dataset.dact === 'addp') {
+        const used = new Set([dlg.querySelector('[name=payer]').value, ...others.map((p) => p.id)]);
+        const free = t.friends.find((f) => !used.has(f.id));
+        if (!free) return toast('Everyone is already a payer');
+        others.push({ id: free.id, amount: 0 });
+        paint();
+        const amts = dlg.querySelectorAll('.qp-amt');
+        amts[amts.length - 1].focus();
+      }
+      if (el.dataset.dact === 'delp') { others.splice(Number(el.dataset.i), 1); paint(); }
+    },
   });
+  dlg.querySelector('form').addEventListener('input', updateRest);
+  dlg.querySelector('form').addEventListener('change', updateRest);
+  const { value, form } = await opening;
   if (value !== 'ok') return;
+  readOthers();
   const sharing = new Set([...form.querySelectorAll('[name=s]')].filter((c) => c.checked).map((c) => c.value));
   const name = form.nm.value.trim();
   t.events.push({
-    id: C.newId(), name, payerId: form.payer.value, extra: 0,
+    id: C.newId(), name, payerId: form.payer.value, otherPayers: others, extra: 0,
     presence: Object.fromEntries(t.friends.filter((f) => !sharing.has(f.id)).map((f) => [f.id, C.TREATED])),
     items: [{ id: C.newId(), name, kind: C.SHARED, price: parseAmount(form.price.value), quantities: {}, excluded: [] }],
   });

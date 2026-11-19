@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>quick expense test</title>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+<div id="toast"></div>
+<input type="file" id="importFile" hidden>
+<pre id="out">running…</pre>
+<script type="module">
+// Drives the Single expense dialog: two payers (Ali main, Reza 300,000), Sara unticked.
+const t = { id: 'g', name: 'G', createdAt: 1, events: [], friends: [
+  { id: 'a', name: 'Ali' }, { id: 's', name: 'Sara' }, { id: 'r', name: 'Reza' }] };
+localStorage.setItem('dostlar.trips.v1', JSON.stringify([t]));
+history.replaceState(null, '', '#/t/g/events');
+await import('../app.js');
+const C = await import('../calc.js');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+const out = [];
+try {
+  document.querySelector('[data-act=quickExpense]').click();
+  await wait(50);
+  const dlg = document.getElementById('dlg');
+  set(dlg.querySelector('[name=nm]'), 'Cake');
+  set(dlg.querySelector('[name=price]'), '1000000');
+  dlg.querySelector('[data-dact=addp]').click();
+  await wait(20);
+  const sel = dlg.querySelector('.qp-id');
+  out.push('second payer default: ' + sel.value);
+  set(sel, 'r');
+  set(dlg.querySelector('.qp-amt'), '300000');
+  out.push('rest text: ' + dlg.querySelector('.qrest').textContent);
+  dlg.querySelector('[name=s][value=s]').checked = false;
+  dlg.querySelector('[data-dval=ok]').click();
+  await wait(50);
+  const saved = JSON.parse(localStorage.getItem('dostlar.trips.v1'))[0];
+  const e = saved.events[0];
+  out.push('event: ' + JSON.stringify({ payer: e.payerId, others: e.otherPayers, presence: e.presence, price: e.items[0].price }));
+  const r = C.tripResult(saved);
+  out.push('people: ' + JSON.stringify(r.people.map((p) => [p.friend.name, p.paid, p.share])));
+  out.push('transfers: ' + JSON.stringify(r.transfers));
+} catch (err) { out.push('ERROR ' + err.message); }
+document.getElementById('out').textContent = out.join('\n');
+</script>
