@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>seed</title>
+<script type="module">
+// Seeds a sample trip and opens the screen named in ?go= (friends|events|result|event|friend).
+import * as C from '../calc.js';
+const t = { id: 'trip1', name: 'Smoke trip', createdAt: 1, friends: [
+  { id: 'a', name: 'Ali' }, { id: 's', name: 'سارا' }, { id: 'r', name: 'Reza' }],
+  events: [{ id: 'e2', name: 'Old cake', payerId: 'r', presence: {}, extra: 0, items: [
+    { id: 'c1', name: 'Old cake', kind: C.SHARED, price: 60000, quantities: {}, excluded: ['s'] }] },
+    { id: 'e1', name: 'Restaurant', payerId: 'a', otherPayers: [{ id: 'r', amount: 100000 }], presence: { s: C.TREATED }, extra: 30, items: [
+    { id: 'i1', name: 'Kebab', kind: C.ORDERED, price: 100000, quantities: { a: 1, s: 2, r: 1 }, excluded: [] },
+    { id: 'i2', name: 'Cake', kind: C.SHARED, price: 90000, quantities: {}, excluded: [] }] }] };
+localStorage.setItem('dostlar.trips.v1', JSON.stringify([t]));
+const go = new URLSearchParams(location.search).get('go');
+const hash = { friends: '#/t/trip1/friends', events: '#/t/trip1/events', result: '#/t/trip1/result',
+  event: '#/e/trip1/e1', cake: '#/e/trip1/e2', friend: '#/f/trip1/r' }[go];
+location.replace('../index.html' + hash);
+</script>

@@ -1,0 +1,130 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dostlar tests</title>
+<pre id="out">running…</pre>
+<script type="module">
+import * as C from '../calc.js';
+
+const results = [];
+function eq(a, b, msg) {
+  const A = JSON.stringify(a), B = JSON.stringify(b);
+  if (A !== B) throw new Error(`${msg || ''} expected ${B} got ${A}`);
+}
+function test(name, fn) {
+  try { fn(); results.push('PASS ' + name); } catch (e) { results.push('FAIL ' + name + ': ' + e.message); }
+}
+const trip = (...names) => ({ id: 't', name: 't', friends: names.map((n) => ({ id: n, name: n })), events: [] });
+const shared = (name, price, excluded = []) => ({ id: name, name, kind: C.SHARED, price, quantities: {}, excluded });
+const expense = (t, name, price, payer, excluded = []) =>
+  ({ ...t, events: [...t.events, { id: name, name, payerId: payer, presence: {}, extra: 0, items: [shared(name, price, excluded)] }] });
+const person = (r, id) => r.people.find((p) => p.friend.id === id);
+
+test('five friends three buyers', () => {
+  let t = trip('Ali', 'Sara', 'Reza', 'Mina', 'Omid');
+  t = expense(expense(expense(t, 'Food', 300, 'Ali'), 'Drinks', 150, 'Sara'), 'Cake', 50, 'Reza');
+  const r = C.tripResult(t);
+  eq(r.total, 500);
+  r.people.forEach((p) => eq(p.share, 100));
+  eq(r.people.map((p) => p.balance), [200, 50, -50, -100, -100]);
+  const got = {};
+  r.transfers.forEach((x) => (got[x.to] = (got[x.to] || 0) + x.amount));
+  eq(got, { Ali: 200, Sara: 50 });
+});
+
+test('identical shares for identical items', () => {
+  const names = [...Array(11).keys()].map((i) => 'F' + i);
+  let t = trip(...names);
+  t = expense(t, 'A', 65463151, 'F0');
+  t = expense(t, 'B', 73392197, 'F0', ['F10']);
+  t = expense(t, 'C', 4100003, 'F1');
+  t = expense(t, 'D', 11600001, 'F2', ['F0', 'F1']);
+  const r = C.tripResult(t);
+  eq(new Set(names.slice(3, 10).map((n) => person(r, n).share)).size, 1);
+  eq(r.people.reduce((a, p) => a + p.balance, 0), 0);
+  eq(r.people.reduce((a, p) => a + p.share, 0), r.total);
+});
+
+test('restaurant with treated birthday friend', () => {
+  const t = trip('Ali', 'Sara', 'Reza', 'Mina');
+  t.events = [{ id: 'e', name: 'Restaurant', payerId: 'Ali', presence: { Sara: C.TREATED }, extra: 0, items: [
+    { id: 'k', name: 'Kebab', kind: C.ORDERED, price: 100, quantities: { Ali: 1, Sara: 2, Reza: 1 }, excluded: [] },
+    { id: 'c', name: 'Cola', kind: C.ORDERED, price: 30, quantities: { Mina: 1, Sara: 1 }, excluded: [] },
+    shared('Cake', 90),
+  ] }];
+  const r = C.tripResult(t);
+  eq([person(r, 'Sara').share, person(r, 'Ali').share, person(r, 'Reza').share, person(r, 'Mina').share], [0, 206, 207, 137]);
+  eq(r.total, 550);
+  eq(person(r, 'Ali').balance, 550 - 206);
+});
+
+test('absent friend and proportional service charge', () => {
+  const t = trip('A', 'B', 'C');
+  t.events = [{ id: 'e', name: 'Park', payerId: 'B', presence: { C: C.ABSENT }, extra: 30, items: [
+    { id: 'r', name: 'Ride', kind: C.ORDERED, price: 50, quantities: { A: 1, B: 3 }, excluded: [] },
+    shared('Parking', 100),
+  ] }];
+  const r = C.tripResult(t);
+  eq(r.people.map((p) => p.share), [110, 220, 0]);
+  eq(r.transfers, [{ from: 'A', to: 'B', amount: 110 }]);
+});
+
+test('problems are reported', () => {
+  const t = trip('A', 'B');
+  t.events = [
+    { id: 'e', name: 'E', payerId: 'A', presence: { A: C.TREATED, B: C.TREATED }, extra: 0, items: [shared('x', 10)] },
+    { id: 'f', name: 'F', payerId: 'A', presence: {}, extra: 0, items: [
+      { id: 'y', name: 'y', kind: C.ORDERED, price: 10, quantities: {}, excluded: [] }, shared('z', 10, ['A', 'B'])] },
+  ];
+  const r = C.tripResult(t);
+  eq(r.total, 0);
+  eq(r.events[0].problems.length, 1);
+  eq(r.events[1].problems.length, 2);
+});
+
+test('rounding', () => {
+  eq([C.Q.of(5, 2).round(), C.Q.of(7, 3).round(), C.Q.of(-5, 2).round()], [3, 2, -2]);
+});
+
+test('import windows file', () => {
+  const t = C.importTrip(JSON.stringify({ friends: ['Ali', 'Sara', 'Omid'], expenses: [
+    { description: 'Dinner', amount: 300, payer: 'Ali', participants: ['Ali', 'Sara'] },
+    { description: 'Cake', amount: 90, payer: 'Sara', participants: [] }] }), 'Party');
+  eq(C.tripResult(t).people.map((p) => p.share), [180, 180, 30]);
+});
+
+test('several payers: extra payers their amount, main payer the rest', () => {
+  const t = trip('A', 'B', 'C');
+  t.events = [{ id: 'e', name: 'Dinner', payerId: 'A', otherPayers: [{ id: 'B', amount: 200 }], presence: {}, extra: 0,
+    items: [shared('Food', 900)] }];
+  const r = C.tripResult(t);
+  eq(r.people.map((p) => [p.paid, p.share, p.balance]), [[700, 300, 400], [200, 300, -100], [0, 300, -300]]);
+  eq(r.people.reduce((a, p) => a + p.balance, 0), 0);
+  t.events[0].otherPayers = [{ id: 'B', amount: 1000 }];
+  const r2 = C.tripResult(t);
+  eq(r2.events[0].problems.length, 1);
+  eq(r2.people.reduce((a, p) => a + p.balance, 0), 0);
+});
+
+test('single expense exclusions migrate to treated', () => {
+  const t = trip('A', 'B', 'C');
+  t.events = [{ id: 'e', name: 'Cake', payerId: 'A', presence: {}, extra: 0, items: [shared('Cake', 100, ['C'])] }];
+  const before = C.tripResult(t).people.map((p) => p.share);
+  C.migrate(t);
+  eq(t.events[0].presence, { C: C.TREATED });
+  eq(t.events[0].items[0].excluded, []);
+  eq(C.tripResult(t).people.map((p) => p.share), before);
+});
+
+// Parity with the Windows app on a real file.
+let parity = '';
+try {
+  const text = await (await fetch('/windows/saved/Bohlul-BD.json')).text();
+  const t = C.importTrip(text, 'x');
+  const r = C.tripResult(t);
+  parity = r.people.map((p) => `${p.friend.name} ${p.paid} ${p.share}`)
+    .concat(r.transfers.map((x) => `${C.nameOf(t, x.from)}>${C.nameOf(t, x.to)} ${x.amount}`)).join('\n');
+} catch (e) { parity = 'PARITY ERROR ' + e.message; }
+
+document.getElementById('out').textContent =
+  results.join('\n') + '\n=====PARITY=====\n' + parity + '\n=====END=====';
+</script>
